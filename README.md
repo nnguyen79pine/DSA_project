@@ -2,6 +2,8 @@
 
 [Insurance Complaints Dataset](https://catalog.data.gov/dataset/insurance-complaints-all-data)
 
+[View the R Markdown Analysis](https://nnguyen79pine.github.io/DSA_project/RMarkdown.html)
+
 This subset of the Texas Department of Insurance data contains **all complaints filed against State Farm**.  
 The source dataset includes **431,830 records and 18 columns** of numeric and text information, from which State Farm cases are filtered.
 
@@ -14,3 +16,4 @@ The source dataset includes **431,830 records and 18 columns** of numeric and te
 3. **Outcome Drivers** – Examine which factors (e.g., coverage type or complaint reason) most strongly influence the final resolution.
 
 This analysis aims to uncover trends in State Farm’s complaint handling and highlight areas for improved customer satisfaction.
+
