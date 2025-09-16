@@ -1,0 +1,334 @@
+---
+title: "Assignment 3"
+author: "Pine Nguyen"
+date: "2025-09-01"
+output: html_document
+---
+
+
+## Prepare the data set
+
+
+**Data source:** ([link](https://catalog.data.gov/dataset/insurance-complaints-all-data)) This dataset from the Texas Department of Insurance includes 431,830 insurance complaint records with 18 columns.
+
+```{r setup, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(lubridate)
+library(janitor)
+
+```
+
+**Question 1** Load the CSV, graph “Number of Complaints per Month (based on Received Date)” using a line chart.
+
+This script loads libraries for cleaning, dates, and visualization, reads the Insurance\_complaints.csv file without headers, and assigns consistent column names. It converts complaint dates into proper formats, groups data by received month, counts complaints per month, and creates a line chart showing complaint trends over time with six-month intervals on the x-axis.
+
+
+``` {r}
+library(readr)
+
+data <- read_csv('C:\\Users\\User\\Downloads\\Project\\Insurance_complaints.csv', col_names = FALSE, show_col_types = FALSE)
+
+```
+
+```{r}
+# The file has 17 columns.
+names(data) <- c(
+  "complaint_id",            
+  "company",                
+  "party_type",              
+  "reason",                 
+  "catastrophe_flag",        
+  "notes",                  
+  "received_date",          
+  "closed_date",            
+  "line_of_insurance",       
+  "coverage_type",           
+  "coverage_type_2",         
+  "associated_party",        
+  "naic_code",               
+  "license_status",        
+  "org_type",               
+  "person_type",             
+  "topics"                  
+)
+```
+
+```{r}
+# Make syntactically clean names
+data <- janitor::clean_names(data)
+```
+
+```{r}
+# Parse dates (use ymd, not mdy)
+data <- data %>%
+  mutate(
+    received_date = ymd(received_date),
+    closed_date   = ymd(closed_date)
+  )
+```
+
+```{r}
+# Build the monthly series from received_date
+monthly <- data %>%
+  filter(!is.na(received_date)) %>%
+  mutate(month = floor_date(received_date, "month")) %>%
+  count(month, name = "complaints") %>%
+  arrange(month)
+```
+
+```{r}
+# 4) Plot
+ggplot(monthly, aes(x = month, y = complaints)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  labs(
+    title = "Monthly Insurance Complaints (by Received Date)",
+    x = "Month (MM-YYYY)",
+    y = "Number of Complaints"
+  ) +
+  scale_x_date(
+    date_breaks = "6 months", 
+    date_labels = "%m-%Y",     
+    expand = c(0.01, 0.01)
+  ) +
+  scale_y_continuous(
+    expand = c(0, 0),
+    breaks = scales::pretty_breaks(n = 8)
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),  
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    panel.grid.minor = element_blank()
+  )
+
+```
+
+The chart shows the monthly number of insurance complaints in Texas from 2011 to 2025. Complaint volumes grew steadily through 2018, peaked at over 2,500 per month, then dropped around 2019–2020 before leveling off. From 2021 onward, complaints fluctuate between roughly 1,000 and 2,000 per month. The very beginning (2011-08) and the end (2025-08) appear unusually low because those months contain incomplete data, not actual drops in complaints.
+
+
+**Question 2** Perform statistical calculation, select relevant columns to analyze, create a graph, and explain what the result shows about your question.
+
+We'll calculate the average complaint resolution time for each company by subtracting the complaint’s received date from its closed date. Then, we summarize the results and visualize the top 5 companies with a bar chart to compare how quickly each one resolves complaints.
+
+```{r}
+# Calculate resolution days
+resolution <- data %>%
+  filter(!is.na(received_date) & !is.na(closed_date)) %>%
+  mutate(resolution_days = as.numeric(closed_date - received_date)) %>%
+  group_by(company) %>%
+  summarise(
+    avg_resolution = mean(resolution_days, na.rm = TRUE),
+    n_complaints = n()
+  ) %>%
+  arrange(avg_resolution)
+```
+
+This gives a table of average resolution time (in days) per company.And then a bar chart makes this easy to compare across companies:
+
+```{r}
+# keep only top 5 companies by avg_resolution
+top10 <- resolution %>%
+  slice_max(avg_resolution, n = 5)
+
+ggplot(top10, aes(x = reorder(company, avg_resolution), y = avg_resolution)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Top 5 Companies with the Longest Average Resolution Times",
+    x = "Company",
+    y = "Average Resolution Time (days)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+   plot.title.position = "plot",             
+    plot.title = element_text(face = "bold", hjust = 0)  ) 
+  
+
+
+```
+
+The results show that State Farm Life Insurance Company has the slowest resolution speed, taking over 150 days on average to close complaints, while State Farm Fire and Casualty Company resolves them much faster, averaging just over 50 days. This indicates that complaint resolution efficiency varies widely across different State Farm branches, with some companies being significantly faster than others in addressing customer issues.
+
+**Question 3:** Is there a relationship between the number of complaints a company receives and how long it takes them to resolve complaints?
+
+Hypothesis: Companies that handle more complaints may take longer (positive correlation), or may be more efficient (negative correlation).
+
+```{r}
+# Compute resolution days for each complaint
+resolution_data <- data %>%
+  filter(!is.na(received_date) & !is.na(closed_date)) %>%
+  mutate(resolution_days = as.numeric(closed_date - received_date))
+
+# Aggregate by company: average resolution time & number of complaints
+company_summary <- resolution_data %>%
+  group_by(company) %>%
+  summarise(
+    avg_resolution = mean(resolution_days, na.rm = TRUE),
+    complaint_count = n()
+  )
+```
+
+```{r}
+# Correlation
+cor_test <- cor.test(company_summary$complaint_count, company_summary$avg_resolution)
+
+# Regression
+model <- lm(avg_resolution ~ complaint_count, data = company_summary)
+summary(model)
+
+```
+
+* The slope for complaint\_count is -0.007, with a p-value = 0.61.
+* That means there is no statistically significant relationship between how many complaints a company gets and how long they take to resolve them.
+* The R² = 0.096 is very low, showing the model explains almost none of the variation in resolution time.
+
+Complaint volume does not predict resolution time in this dataset.
+
+
+**Question 3:** For complaints filed against State Farm, is a higher monthly complaint volume associated with longer average resolution times?
+
+We will calculate how long each took to resolve, and then summarize the average resolution time and number of complaints by month. It tests whether months with more complaints tend to have longer or shorter resolution times using correlation and linear regression. Finally, we create a scatter plot with a regression line and displays the key statistics (correlation, p-value, slope, and R²) directly on the chart.
+
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+state_monthly <- data %>%
+  filter(!is.na(company),
+         grepl("state\\s*farm", tolower(company))) %>%
+  mutate(
+    received_date = ymd(received_date),
+    closed_date   = ymd(closed_date),
+    resolution_days = as.numeric(closed_date - received_date),
+    month = floor_date(received_date, "month")
+  ) %>%
+  filter(is.finite(resolution_days), resolution_days >= 0) %>%
+  group_by(month) %>%
+  summarise(
+    complaints = n(),
+    avg_days   = mean(resolution_days, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  filter(complaints >= 5) %>%
+  arrange(month)
+
+
+# --- Correlation and simple linear regression
+cor_test_sf <- cor.test(state_monthly$complaints, state_monthly$avg_days, method = "pearson")
+lm_sf <- lm(avg_days ~ complaints, data = state_monthly)
+cor_test_sf      # prints r and p-value
+summary(lm_sf)   # prints slope and R^2
+
+```
+```{r}
+# --- Scatter plot with regression line and on-plot stats
+ggplot(state_monthly, aes(x = complaints, y = avg_days)) +
+  geom_point(size = 2.8, alpha = 0.8, color = "steelblue") +
+  geom_smooth(method = "lm", se = TRUE, color = "red") +
+  labs(
+    title = "State Farm: Monthly Complaint Volume vs. Avg Resolution Time",
+    subtitle = "Each point is one month; red line = linear fit",
+    x = "Monthly Complaint Volume (State Farm)",
+    y = "Average Days to Resolution"
+  ) +
+  annotate(
+    "text",
+    x = Inf, y = Inf, hjust = 1.05, vjust = 1.5, size = 4,
+    label = paste0(
+      "r = ", round(cor_test_sf$estimate, 2),
+      "\np = ", signif(cor_test_sf$p.value, 3),
+      "\nSlope (days per 100 complaints) = ",
+      round(100 * coef(lm_sf)["complaints"], 1),
+      "\nR² = ", signif(summary(lm_sf)$r.squared, 3)
+    )
+  ) +
+  theme_minimal(base_size = 12)
+
+```
+
+There is no statistically significant relationship between monthly complaint volume and average resolution time for State Farm (r = −0.11, p = 0.175, R² ≈ 0.012).
+The slight negative slope (≈ −11 days per additional 100 complaints) is small and likely not meaningful. Overall, the analysis provides no evidence that higher monthly volume leads to slower resolutions.
+
+Scatter plot with regression line
+```{r}
+ggplot(company_summary, aes(x = complaint_count, y = avg_resolution)) +
+  geom_point(color = "steelblue", size = 3, alpha = 0.7) +
+  geom_smooth(method = "lm", se = TRUE, color = "darkred") +
+  labs(
+    title = "Relationship Between Complaint Volume and Resolution Time",
+    x = "Number of Complaints per Company",
+    y = "Average Resolution Time (days)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+```
+
+This chart compares the number of complaints a company receives with its average resolution time. The slight downward slope suggests that companies with more complaints may resolve them a bit faster, but the wide confidence band shows the relationship is weak and not statistically significant.
+
+
+**Question 4:** 
+In this step, we will use a numerical column from the dataset, such as resolution_days, which measures how long it takes to resolve a complaint. We will plot a histogram to show how these values are distributed, add clear labels and a title, and then discuss whether the distribution is skewed, normal, or spread out. This will help us understand overall patterns in complaint resolution times.
+
+```{r}
+#Create the variable
+resolution_data <- data %>%
+  filter(!is.na(received_date) & !is.na(closed_date)) %>%
+  mutate(resolution_days = as.numeric(closed_date - received_date))
+```
+
+```{r}
+ggplot(resolution_data, aes(x = resolution_days)) +
+  geom_histogram(binwidth = 30, fill = "steelblue", color = "black", alpha = 0.7) +
+  labs(
+    title = "Distribution of Complaint Resolution Times",
+    x = "Resolution Time (days)",
+    y = "Number of Complaints"
+  ) +
+  scale_x_continuous(
+    breaks = seq(0, max(resolution_data$resolution_days, na.rm = TRUE), by = 30)  
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(size = 12, angle = 45, hjust = 1),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5)
+  )
+
+```
+
+Most complaints are resolved within about 50 to 120 days, which is where the bars are tallest. The shape is skewed to the right, meaning that while the majority of complaints are resolved in a few months, there are some cases that take much longer, extending past 200 days and even reaching over 600 days. This indicates that long resolution times are relatively rare but do exist as outliers. Overall, the distribution is concentrated on shorter times with a long tail of slower resolutions.
+
+**Question 5** Do resolution times differ between Homeowners complaints and Automobile complaints?
+
+We’ll filter the dataset into Homeowners vs. Automobile coverage, and compare their resolution times.
+```{r}
+library(dplyr)
+library(ggplot2)
+
+# Create resolution_days first
+resolution_data <- data %>%
+  filter(!is.na(received_date) & !is.na(closed_date)) %>%
+  mutate(resolution_days = as.numeric(closed_date - received_date))
+
+# Select only two groups for comparison
+two_groups <- resolution_data %>%
+  filter(coverage_type %in% c("Homeowners", "Automobile"))
+
+```
+Earlier we saw that resolution\_days is right-skewed and not perfectly normal. However, t-tests can still be reliable when the sample size is large. To be more cautious, we could also run a non-parametric Wilcoxon rank-sum test, which does not assume normality.
+
+```{r}
+# t-test
+t_test_result <- t.test(resolution_days ~ coverage_type, data = two_groups)
+t_test_result
+
+# Non-parametric alternative (Wilcoxon / Mann-Whitney)
+wilcox_test <- wilcox.test(resolution_days ~ coverage_type, data = two_groups)
+wilcox_test
+
+```
+The t-test shows no significant difference in average resolution times between Automobile and Homeowners complaints (p = 0.49). The Wilcoxon test also suggests no strong difference (p = 0.08).
+
