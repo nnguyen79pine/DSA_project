@@ -2,6 +2,8 @@
 
 [Insurance Complaints Dataset](https://catalog.data.gov/dataset/insurance-complaints-all-data)
 
+[View the D3 Complaints Visualization](d3_complaints_viz/)
+
 [View the R Markdown Analysis](https://nnguyen79pine.github.io/DSA_project/RMarkdown.html)
 
 This subset of the Texas Department of Insurance data contains **all complaints filed against State Farm**.  
